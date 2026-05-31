@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>✨ 段文莹 ✨</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #050510;
+    overflow: hidden;
+    height: 100vh; height: 100dvh;
+    width: 100vw;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+  #ui-layer {
+    position: fixed; bottom: 0; left: 0; width: 100%;
+    z-index: 10; pointer-events: none;
+    text-align: center;
+    padding-bottom: 10vh;
+    padding-bottom: max(10vh, 60px);
+    transition: opacity 0.8s;
+  }
+  #message {
+    font-size: 22px; font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 30px rgba(255,180,220,0.8), 0 0 60px rgba(180,160,255,0.6);
+    letter-spacing: 2px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  #message.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  #tap-hint {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    z-index: 10; pointer-events: none;
+    color: rgba(255,255,255,0.45);
+    font-size: 12px; letter-spacing: 2px;
+    animation: hintPulse 2.5s ease-in-out infinite;
+    opacity: 0; transition: opacity 0.6s;
+  }
+  #tap-hint.show { opacity: 1; }
+  @keyframes hintPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="ui-layer"><div id="message"></div></div>
+<div id="tap-hint">✨ 轻触屏幕送出祝福 ✨</div>
+
+<script>
+// ============================================================
+//  科幻爱心 · 段文莹专属
+//  从星辰大海中，读取你的名字
+// ============================================================
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+const tapHint = document.getElementById('tap-hint');
+
+let W, H;
+let dpr = Math.min(window.devicePixelRatio || 1, 2); // 限制像素比，移动端性能
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---- 工具函数 ----
+function lerp(a, b, t) { return a + (b - a) * t; }
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeInOutCubic(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
+function easeOutElastic(t) {
+  if (t === 0 || t === 1) return t;
+  return Math.pow(2, -10*t) * Math.sin((t - 0.1) * 5 * Math.PI) + 1;
+}
+
+// ---- 粒子类 ----
+const CHAR_POOL = '段文莹日月星辰山河远阔人间烟火愿你天天开心快乐幸福美好温暖光芒璀璨善良可爱温柔' +
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' +
+  'アイウエオカキクケコサシスセソタチツテト' +
+  '★☆♡♥♢♦♤♧✦✧✶✷❋❀❁⚝⚘' +
+  'のちはまことりしすくもなへやつを';
+
+const COLORS = [
+  '#00d4ff', '#38bdf8', '#818cf8', '#a78bfa', '#c084fc',
+  '#e879f9', '#f472b6', '#fb7185', '#fbbf24', '#fcd34d',
+  '#ffffff', '#e0e7ff', '#fce7f3', '#d1fae5',
+];
+
+class Particle {
+  constructor() {
+    this.reset();
+    // 初始随机散布
+    this.x = rand(0, W);
+    this.y = rand(0, H);
+    this.tx = this.x;
+    this.ty = this.y;
+    this.ox = this.x;
+    this.oy = this.y;
+  }
+
+  reset() {
+    this.char = CHAR_POOL[randInt(0, CHAR_POOL.length - 1)];
+    this.size = rand(10, 22);
+    this.color = COLORS[randInt(0, COLORS.length - 1)];
+    this.alpha = rand(0.3, 0.9);
+    this.speed = rand(0.3, 1.8);
+    this.phase = rand(0, Math.PI * 2);
+    this.amplitude = rand(10, 60);
+    this.twinkleSpeed = rand(0.02, 0.06);
+  }
+
+  setTarget(tx, ty) {
+    this.ox = this.x;
+    this.oy = this.y;
+    this.tx = tx;
+    this.ty = ty;
+  }
+
+  update(t, globalPhase) {
+    if (globalPhase === 'scatter') {
+      // 漂移 + 正弦波动
+      this.x += Math.sin(t * 0.001 + this.phase) * this.speed * 0.6;
+      this.y += Math.cos(t * 0.0013 + this.phase) * this.speed * 0.5;
+      // 边界环绕
+      if (this.x < -40) this.x = W + 40;
+      if (this.x > W + 40) this.x = -40;
+      if (this.y < -40) this.y = H + 40;
+      if (this.y > H + 40) this.y = -40;
+      this.tx = this.x;
+      this.ty = this.y;
+    } else if (globalPhase === 'converging') {
+      // 向目标移动
+      const progress = (t - convergeStart) / convergeDuration;
+      const eased = easeOutCubic(Math.min(1, progress));
+      this.x = lerp(this.ox, this.tx, eased);
+      this.y = lerp(this.oy, this.ty, eased);
+    } else if (globalPhase === 'holding') {
+      // 微小的呼吸浮动
+      const bt = t * 0.003;
+      this.x = this.tx + Math.sin(bt + this.phase) * 2;
+      this.y = this.ty + Math.cos(bt * 1.3 + this.phase) * 2;
+    } else if (globalPhase === 'to_heart') {
+      const progress = (t - heartStart) / heartDuration;
+      const eased = easeOutElastic(Math.min(1, progress));
+      this.x = lerp(this.ox, this.tx, eased);
+      this.y = lerp(this.oy, this.ty, eased);
+    } else if (globalPhase === 'heart_idle') {
+      // 心跳呼吸
+      const bt = t * 0.004;
+      const scale = 1 + Math.sin(bt) * 0.04;
+      const cx = W / 2;
+      const cy = H * 0.42;
+      this.x = cx + (this.ox - cx) * scale;
+      this.y = cy + (this.oy - cy) * scale;
+      this.alpha = 0.75 + Math.sin(bt * 1.7) * 0.25;
+    }
+
+    // 闪烁
+    this.alpha += Math.sin(t * this.twinkleSpeed + this.phase) * 0.008;
+    this.alpha = Math.max(0.15, Math.min(1, this.alpha));
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.font = `${this.size}px "PingFang SC", "Microsoft YaHei", "KaiTi", monospace`;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = this.size * 0.6;
+    ctx.fillText(this.char, this.x - this.size/2, this.y + this.size/3);
+    ctx.restore();
+  }
+}
+
+// ---- 全局状态 ----
+let particles = [];
+const PARTICLE_COUNT = 180;
+const NOISE_COUNT = 100;      // 噪点粒子（不参与名字形成）
+const NAME_PARTICLES = 80;   // 形成名字的粒子
+
+let globalPhase = 'scatter';  // scatter | converging | holding | to_heart | heart_idle
+let phaseStartTime = 0;
+let convergeStart = 0;
+let convergeDuration = 2800;  // 汇聚耗时 ms
+let heartStart = 0;
+let heartDuration = 2200;     // 变爱心耗时 ms
+let animId;
+
+// ---- 采样文字形状获取目标坐标 ----
+function sampleTextShape(text, fontSize, offsetX, offsetY) {
+  const offCanvas = document.createElement('canvas');
+  const offCtx = offCanvas.getContext('2d');
+  offCanvas.width = W * dpr;
+  offCanvas.height = H * dpr;
+  offCtx.scale(dpr, dpr);
+
+  offCtx.fillStyle = '#fff';
+  offCtx.font = `bold ${fontSize}px "PingFang SC", "Microsoft YaHei", "STKaiti", "KaiTi", serif`;
+  offCtx.textAlign = 'center';
+  offCtx.textBaseline = 'middle';
+  offCtx.fillText(text, offsetX, offsetY);
+
+  const imageData = offCtx.getImageData(0, 0, W * dpr, H * dpr);
+  const points = [];
+  const step = Math.max(2, Math.floor(fontSize / 18)); // 采样步长
+
+  for (let y = 0; y < H * dpr; y += step) {
+    for (let x = 0; x < W * dpr; x += step) {
+      const idx = (y * W * dpr + x) * 4;
+      if (imageData.data[idx + 3] > 128) {
+        points.push({ x: x / dpr, y: y / dpr });
+      }
+    }
+  }
+
+  return points;
+}
+
+// ---- 生成爱心形状的目标坐标 ----
+function sampleHeartShape(cx, cy, heartSize, count) {
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    const t = (i / count) * Math.PI * 2;
+    // 爱心参数方程
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+
+    const scale = heartSize / 16;
+    const px = cx + x * scale;
+    const py = cy + y * scale;
+
+    // 加入一些内部填充点
+    const r = Math.random();
+    points.push({
+      x: px + rand(-3, 3) * (1 - r * 0.5),
+      y: py + rand(-3, 3) * (1 - r * 0.5),
+    });
+  }
+
+  // 额外填充内部
+  for (let i = 0; i < count * 1.5; i++) {
+    const t = Math.random() * Math.PI * 2;
+    const r = Math.random();
+    const x = 16 * Math.pow(Math.sin(t), 3) * r;
+    const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * r;
+    const scale = heartSize / 16;
+    points.push({
+      x: cx + x * scale + rand(-2, 2),
+      y: cy + y * scale + rand(-2, 2),
+    });
+  }
+
+  return points;
+}
+
+// ---- 初始化粒子 ----
+function initParticles() {
+  particles = [];
+
+  // 采样"段文莹"的形状
+  const nameFontSize = Math.min(W / 3.2, 72);
+  const namePoints = sampleTextShape(
+    '段文莹',
+    nameFontSize,
+    W / 2,
+    H * 0.42
+  );
+
+  // 打乱并选取粒子
+  const shuffled = [...namePoints].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, NAME_PARTICLES);
+
+  // 名字粒子
+  for (let i = 0; i < selected.length; i++) {
+    const p = new Particle();
+    p.tx = selected[i].x;
+    p.ty = selected[i].y;
+    p.ox = p.x;
+    p.oy = p.y;
+    // 名字粒子使用温暖的色彩
+    p.color = COLORS[randInt(0, 11)];
+    p.size = rand(8, 16);
+    p.alpha = rand(0.5, 1);
+    particles.push(p);
+  }
+
+  // 噪点粒子（额外漂浮的，最终会消散或融入）
+  for (let i = 0; i < NOISE_COUNT; i++) {
+    const p = new Particle();
+    p.color = COLORS[randInt(0, 11)];
+    p.size = rand(6, 14);
+    p.alpha = rand(0.2, 0.5);
+    // 噪点粒子目标设在屏幕外或随机
+    p.tx = rand(-200, W + 200);
+    p.ty = rand(-200, H + 200);
+    particles.push(p);
+  }
+}
+
+// ---- 阶段切换 ----
+function switchPhase(newPhase) {
+  globalPhase = newPhase;
+  phaseStartTime = performance.now();
+
+  if (newPhase === 'converging') {
+    convergeStart = phaseStartTime;
+    // 更新噪点粒子的目标(让它们向外消散)
+    for (let i = NAME_PARTICLES; i < particles.length; i++) {
+      const p = particles[i];
+      p.ox = p.x; p.oy = p.y;
+      // 向外远离中心
+      const angle = Math.atan2(p.y - H/2, p.x - W/2);
+      const dist = rand(300, 800);
+      p.tx = p.x + Math.cos(angle) * dist;
+      p.ty = p.y + Math.sin(angle) * dist;
+      p.alpha = 0.4; // 逐渐变淡
+    }
+  }
+
+  if (newPhase === 'to_heart') {
+    heartStart = phaseStartTime;
+
+    // 采样爱心形状
+    const heartSize = Math.min(W * 0.45, H * 0.38);
+    const heartPoints = sampleHeartShape(W / 2, H * 0.40, heartSize, NAME_PARTICLES + NOISE_COUNT);
+
+    // 所有粒子都去爱心
+    const allParticles = heartPoints.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < Math.min(particles.length, allParticles.length); i++) {
+      const p = particles[i];
+      p.ox = p.x; p.oy = p.y;
+      p.tx = allParticles[i].x;
+      p.ty = allParticles[i].y;
+      p.color = ['#f472b6', '#fb7185', '#f9a8d4', '#fda4af', '#fbbf24', '#fcd34d',
+                  '#c084fc', '#e879f9', '#fff', '#fce7f3'][randInt(0, 9)];
+      p.size = rand(7, 15);
+      p.alpha = rand(0.6, 1);
+      p.speed = rand(0.8, 2.5);
+    }
+  }
+
+  if (newPhase === 'heart_idle') {
+    // 更新所有粒子的参考位置
+    for (const p of particles) {
+      p.ox = p.x;
+      p.oy = p.y;
+    }
+    // 显示消息
+    showMessage();
+  }
+}
+
+function showMessage() {
+  messageEl.innerHTML = '愿<span style="color:#fbbf24;">段文莹</span>天天开心 ✨<br><span style="font-size:15px;color:rgba(255,255,255,0.55);">所遇皆温柔 · 所愿皆成真</span>';
+  messageEl.classList.add('show');
+  tapHint.classList.add('show');
+}
+
+// ---- 主循环 ----
+let lastTime = 0;
+let elapsedTotal = 0;
+const SCATTER_DURATION = 3800;   // 漂浮阶段时长
+const HOLD_DURATION = 2000;      // 名字保持时长
+
+function animate(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = Math.min(timestamp - lastTime, 50); // 防止跳帧
+  lastTime = timestamp;
+  elapsedTotal += dt;
+
+  // 阶段切换逻辑
+  if (globalPhase === 'scatter' && elapsedTotal > SCATTER_DURATION) {
+    switchPhase('converging');
+  }
+  if (globalPhase === 'converging' && timestamp - convergeStart > convergeDuration) {
+    switchPhase('holding');
+  }
+  if (globalPhase === 'holding' && timestamp - phaseStartTime > HOLD_DURATION) {
+    switchPhase('to_heart');
+  }
+  if (globalPhase === 'to_heart' && timestamp - heartStart > heartDuration) {
+    switchPhase('heart_idle');
+  }
+
+  // 清屏（带残影）
+  ctx.fillStyle = 'rgba(5, 5, 16, 0.25)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 更新 & 绘制粒子
+  for (const p of particles) {
+    p.update(timestamp, globalPhase);
+
+    // 噪点粒子在汇聚阶段逐渐变淡
+    if (globalPhase === 'converging') {
+      const idx = particles.indexOf(p);
+      if (idx >= NAME_PARTICLES) {
+        p.alpha = Math.max(0, p.alpha - 0.004);
+      }
+    }
+
+    p.draw(ctx);
+  }
+
+  // 名字保持阶段画光晕
+  if (globalPhase === 'holding' || globalPhase === 'to_heart') {
+    const glowAlpha = globalPhase === 'to_heart'
+      ? Math.max(0, 1 - (timestamp - heartStart) / heartDuration)
+      : 0.5 + Math.sin(timestamp * 0.003) * 0.3;
+
+    if (glowAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = glowAlpha * 0.15;
+      const grd = ctx.createRadialGradient(W/2, H*0.42, 0, W/2, H*0.42, W*0.5);
+      grd.addColorStop(0, '#c084fc');
+      grd.addColorStop(0.5, '#a78bfa');
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+  }
+
+  // 爱心阶段画辉光
+  if (globalPhase === 'heart_idle') {
+    const glowAlpha = 0.12 + Math.sin(timestamp * 0.004) * 0.06;
+    ctx.save();
+    ctx.globalAlpha = glowAlpha;
+    const grd = ctx.createRadialGradient(W/2, H*0.40, 0, W/2, H*0.40, W*0.55);
+    grd.addColorStop(0, '#f472b6');
+    grd.addColorStop(0.4, '#e879f9');
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
+  animId = requestAnimationFrame(animate);
+}
+
+// ---- 点击生成小爱心 ----
+const floatingHearts = [];
+
+canvas.addEventListener('click', (e) => {
+  if (globalPhase !== 'heart_idle') return;
+  const touch = e;
+  for (let i = 0; i < 8; i++) {
+    floatingHearts.push({
+      x: touch.clientX,
+      y: touch.clientY,
+      vx: rand(-1.5, 1.5),
+      vy: rand(-3, -0.8),
+      life: 1,
+      decay: rand(0.008, 0.02),
+      size: rand(14, 30),
+      char: ['❤', '💖', '✨', '💕', '🌟', '💫', '🩷', '♥'][randInt(0, 7)],
+    });
+  }
+});
+
+// 在animate中也更新漂浮爱心
+const origAnimate = animate;
+// 实际上直接修改循环即可 —— 我在animate最后加上漂浮爱心逻辑
+
+// ---- 覆盖以添加漂浮爱心 ----
+function animateWithHearts(timestamp) {
+  // 更新漂浮爱心
+  for (let i = floatingHearts.length - 1; i >= 0; i--) {
+    const h = floatingHearts[i];
+    h.x += h.vx;
+    h.y += h.vy;
+    h.vy -= 0.02; // 轻微上浮
+    h.life -= h.decay;
+    if (h.life <= 0) {
+      floatingHearts.splice(i, 1);
+      continue;
+    }
+    ctx.save();
+    ctx.globalAlpha = h.life;
+    ctx.font = `${h.size}px sans-serif`;
+    ctx.fillText(h.char, h.x - h.size/2, h.y + h.size/3);
+    ctx.restore();
+  }
+}
+
+// 把漂浮爱心注入主循环
+const _origRAF = animate;
+// ---- 重写主循环，加入漂浮爱心 ----
+function animateFinal(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = Math.min(timestamp - lastTime, 50);
+  lastTime = timestamp;
+  elapsedTotal += dt;
+
+  // 阶段切换逻辑
+  if (globalPhase === 'scatter' && elapsedTotal > SCATTER_DURATION) {
+    switchPhase('converging');
+  }
+  if (globalPhase === 'converging' && timestamp - convergeStart > convergeDuration) {
+    switchPhase('holding');
+  }
+  if (globalPhase === 'holding' && timestamp - phaseStartTime > HOLD_DURATION) {
+    switchPhase('to_heart');
+  }
+  if (globalPhase === 'to_heart' && timestamp - heartStart > heartDuration) {
+    switchPhase('heart_idle');
+  }
+
+  // 清屏（带残影，制造拖尾效果）
+  ctx.fillStyle = 'rgba(5, 5, 16, 0.28)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 背景星星(少量固定星星)
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 30; i++) {
+    const sx = (i * 173 + 31) % W;
+    const sy = (i * 251 + 67) % H;
+    const sa = 0.2 + Math.sin(timestamp * 0.002 + i) * 0.15;
+    ctx.globalAlpha = sa;
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+  ctx.globalAlpha = 1;
+
+  // 更新 & 绘制粒子
+  for (const p of particles) {
+    p.update(timestamp, globalPhase);
+
+    // 噪点粒子在汇聚阶段逐渐变淡
+    if (globalPhase === 'converging') {
+      const idx = particles.indexOf(p);
+      if (idx >= NAME_PARTICLES) {
+        p.alpha = Math.max(0, p.alpha - 0.005);
+      }
+    }
+
+    p.draw(ctx);
+  }
+
+  // 名字保持阶段画光晕
+  if (globalPhase === 'holding' || globalPhase === 'to_heart') {
+    const glowAlpha = globalPhase === 'to_heart'
+      ? Math.max(0, 1 - (timestamp - heartStart) / heartDuration)
+      : 0.45 + Math.sin(timestamp * 0.003) * 0.25;
+
+    if (glowAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = glowAlpha * 0.15;
+      const grd = ctx.createRadialGradient(W/2, H*0.42, 0, W/2, H*0.42, W*0.45);
+      grd.addColorStop(0, '#c084fc');
+      grd.addColorStop(0.5, '#a78bfa');
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+  }
+
+  // 爱心阶段
+  if (globalPhase === 'heart_idle') {
+    const glowAlpha = 0.1 + Math.sin(timestamp * 0.004) * 0.05;
+    ctx.save();
+    ctx.globalAlpha = glowAlpha;
+    const grd = ctx.createRadialGradient(W/2, H*0.40, 0, W/2, H*0.40, W*0.5);
+    grd.addColorStop(0, '#f472b6');
+    grd.addColorStop(0.4, '#e879f9');
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
+  // 漂浮小爱心
+  for (let i = floatingHearts.length - 1; i >= 0; i--) {
+    const h = floatingHearts[i];
+    h.x += h.vx;
+    h.y += h.vy;
+    h.vy -= 0.025;
+    h.life -= h.decay;
+    if (h.life <= 0) { floatingHearts.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = h.life;
+    ctx.font = `${h.size}px sans-serif`;
+    ctx.fillText(h.char, h.x - h.size/2, h.y + h.size/3);
+    ctx.restore();
+  }
+
+  animId = requestAnimationFrame(animateFinal);
+}
+
+// ---- 启动 ----
+function start() {
+  resize();
+  initParticles();
+  lastTime = 0;
+  elapsedTotal = 0;
+  globalPhase = 'scatter';
+  messageEl.classList.remove('show');
+  tapHint.classList.remove('show');
+  floatingHearts.length = 0;
+  if (animId) cancelAnimationFrame(animId);
+  animId = requestAnimationFrame(animateFinal);
+}
+
+window.addEventListener('resize', () => {
+  resize();
+  // 重新采样目标位置
+  if (globalPhase === 'scatter' || globalPhase === 'converging') {
+    const nameFontSize = Math.min(W / 3.2, 72);
+    const namePoints = sampleTextShape('段文莹', nameFontSize, W / 2, H * 0.42);
+    const shuffled = [...namePoints].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, NAME_PARTICLES);
+    for (let i = 0; i < Math.min(selected.length, NAME_PARTICLES); i++) {
+      if (particles[i]) {
+        particles[i].tx = selected[i].x;
+        particles[i].ty = selected[i].y;
+      }
+    }
+  }
+});
+
+start();
+</script>
+</body>
+</html>
