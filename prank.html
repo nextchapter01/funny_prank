@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>🔍 段文莹 · 智商检测中心</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+    background: linear-gradient(160deg, #0a0a1a 0%, #141430 40%, #1a1040 70%, #0a0a1a 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* 星星背景 */
+  .stars-wrap {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+  }
+  .star-dot {
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+    animation: starGlow var(--d) ease-in-out infinite;
+    animation-delay: var(--dl);
+  }
+  @keyframes starGlow {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.6); }
+  }
+  /* 主卡片 */
+  .card {
+    position: relative; z-index: 1;
+    width: 90vw; max-width: 400px;
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 24px 18px 28px;
+    text-align: center;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
+    animation: cardIn 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+    margin: 16px 0;
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(50px) scale(0.92); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  /* 顶部图标 */
+  .top-icon {
+    font-size: 56px;
+    margin-bottom: 6px;
+    animation: iconFloat 2.2s ease-in-out infinite;
+  }
+  @keyframes iconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  h1 {
+    font-size: 18px;
+    background: linear-gradient(90deg, #6ec3ff, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: rgba(255,255,255,0.4);
+    font-size: 10px;
+    letter-spacing: 3px;
+    margin-bottom: 18px;
+  }
+  .divider {
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, rgba(168,139,250,0.5), rgba(244,114,182,0.5), transparent);
+    margin-bottom: 18px;
+  }
+  /* 进度条 */
+  .pg-wrap {
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px; height: 7px;
+    margin-bottom: 6px; overflow: hidden;
+  }
+  .pg-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6ec3ff, #a78bfa, #f472b6);
+    border-radius: 12px;
+    width: var(--p, 0%);
+    transition: width 0.7s cubic-bezier(0.25, 0.8, 0.25, 1.2);
+    box-shadow: 0 0 16px rgba(168,139,250,0.5);
+  }
+  .pg-label {
+    font-size: 11px; color: rgba(255,255,255,0.45);
+    margin-bottom: 14px; text-align: right;
+  }
+  /* 问题框 */
+  .q-box {
+    background: rgba(0,0,0,0.3);
+    border-radius: 16px;
+    padding: 20px 14px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    transition: all 0.3s;
+  }
+  .q-label {
+    color: rgba(255,255,255,0.35);
+    font-size: 10px; letter-spacing: 3px;
+    margin-bottom: 7px;
+  }
+  .q-text {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.7;
+  }
+  .highlight {
+    color: #f472b6;
+    font-weight: 900;
+    text-shadow: 0 0 18px rgba(244,114,182,0.45);
+  }
+  .highlight2 {
+    color: #ffcc00;
+    font-weight: 900;
+    text-shadow: 0 0 18px rgba(255,204,0,0.5);
+  }
+  /* 按钮组 */
+  .btn-row {
+    display: flex; gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 13px 32px;
+    border-radius: 50px;
+    font-size: 16px; font-weight: 700;
+    border: none; cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+    min-width: 105px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(0.93); }
+  .btn-yes {
+    background: linear-gradient(135deg, #6ec3ff, #3b82f6);
+    color: #fff;
+    box-shadow: 0 8px 28px rgba(59,130,246,0.35);
+  }
+  .btn-no {
+    background: linear-gradient(135deg, #f472b6, #e11d48);
+    color: #fff;
+    box-shadow: 0 8px 28px rgba(225,29,72,0.35);
+  }
+  .btn-no.escape {
+    position: fixed;
+    z-index: 999;
+    transition: left 0.12s ease-out, top 0.12s ease-out;
+  }
+  /* 浮动提示 */
+  .toast {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(244,114,182,0.92);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 30px;
+    font-weight: 700; font-size: 15px;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 10px 36px rgba(244,114,182,0.5);
+    animation: toastIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    white-space: nowrap;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  /* 抖动 */
+  .shake {
+    animation: shakeIt 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+  @keyframes shakeIt {
+    0%, 100% { transform: translateX(0); }
+    15% { transform: translateX(-14px); }
+    30% { transform: translateX(14px); }
+    45% { transform: translateX(-10px); }
+    60% { transform: translateX(10px); }
+    75% { transform: translateX(-5px); }
+    90% { transform: translateX(5px); }
+  }
+  /* 彩带 */
+  .confetti {
+    position: fixed;
+    pointer-events: none;
+    z-index: 998;
+    animation: confettiFall var(--fd) linear forwards;
+    font-size: 22px;
+  }
+  @keyframes confettiFall {
+    0% { transform: translateY(-60px) rotate(0deg) scale(0); opacity: 0; }
+    15% { opacity: 1; transform: scale(1); }
+    100% { transform: translateY(110vh) rotate(var(--fr)) scale(0.6); opacity: 0; }
+  }
+  /* 结果页大表情 */
+  .big-result-emoji {
+    font-size: 80px;
+    animation: resultBounce 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  @keyframes resultBounce {
+    from { transform: scale(0) rotate(-30deg); }
+    to { transform: scale(1) rotate(0deg); }
+  }
+  .retry-btn {
+    margin-top: 16px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.55);
+    border: 1px solid rgba(255,255,255,0.14);
+    padding: 11px 26px;
+    border-radius: 50px;
+    font-size: 13px; cursor: pointer;
+    transition: all 0.3s;
+  }
+  .retry-btn:active {
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+  }
+  .footer-hint {
+    color: rgba(255,255,255,0.2);
+    font-size: 10px; margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stars-wrap" id="starsWrap"></div>
+
+<div class="card" id="appCard">
+  <!-- JS动态渲染 -->
+</div>
+
+<script>
+// ========== 星空 ==========
+(function stars() {
+  const wrap = document.getElementById('starsWrap');
+  for (let i = 0; i < 70; i++) {
+    const d = document.createElement('div');
+    d.className = 'star-dot';
+    const s = Math.random() * 2.5 + 1;
+    d.style.cssText = `
+      width:${s}px; height:${s}px;
+      top:${Math.random()*100}%; left:${Math.random()*100}%;
+      --d:${Math.random()*2.5+1.2}s;
+      --dl:${Math.random()*2}s;
+    `;
+    wrap.appendChild(d);
+  }
+})();
+
+// ========== 核心 ==========
+const card = document.getElementById('appCard');
+const TARGET = '段文莹';
+let idx = 0, noCount = 0, progress = 0;
+let toastTimer = null;
+let escapeTimer = null;
+
+// ---- 流程定义 ----
+const steps = [
+  { // 0 开场
+    icon: '🧠', title: '全球智商检测中心',
+    sub: 'GLOBAL IQ DETECTION SYSTEM',
+    render() {
+      progress = 3;
+      return `
+        <div class="top-icon">🧠</div>
+        <h1>全球智商检测中心</h1>
+        <div class="subtitle">GLOBAL IQ DETECTION SYSTEM</div>
+        <div class="divider"></div>
+        <div class="q-box">
+          <div style="color:rgba(255,255,255,0.65);font-size:13px;line-height:1.9;">
+            🌐 正在连接全球神经网络...<br>
+            📡 已接入 192 国智商数据库<br>
+            👤 检测到访问者：<span class="highlight">${TARGET}</span><br>
+            🔐 身份核验中...
+          </div>
+        </div>
+        <button class="btn btn-yes" style="font-size:15px;padding:12px 28px;" onclick="goNext()">
+          👉 开始检测
+        </button>
+      `;
+    }
+  },
+  { // 1
+    icon: '🤖', qLabel: '问题 01',
+    q: `初步扫描发现：<span class="highlight">${TARGET}</span> 的智商数据疑似异常...`,
+    qHint: '请诚实配合以下检测：',
+    yes: '好的，来吧 👌', no: '我才不测！',
+    p: 15,
+  },
+  { // 2
+    icon: '📊', qLabel: '问题 02',
+    q: `第一题：1 + 1 等于几？`,
+    qHint: '（这是一道送分题，请认真作答）',
+    yes: '等于 2', no: '等于 11',
+    p: 18,
+  },
+  { // 3
+    icon: '🤔', qLabel: '问题 03',
+    q: `你确定 1 + 1 = 2 吗？<br>系统需要<span class="highlight">二次确认</span>`,
+    qHint: '（三思而后行）',
+    yes: '非常确定 ✅', no: '可能是 11...',
+    p: 16,
+  },
+  { // 4
+    icon: '🔬', qLabel: '深度分析',
+    q: `深度神经网络分析中...<br>发现 <span class="highlight">${TARGET}</span> 的<br><span class="highlight2">笨蛋指数</span> 显著偏高！`,
+    qHint: '你是否承认以下事实：',
+    yes: '我承认我是大笨蛋 😂', no: '坚决不承认！',
+    p: 22,
+  },
+  { // 5 关键题
+    icon: '🎯', qLabel: '最终确认',
+    q: `<span class="highlight">${TARGET}</span> 是<br><span style="font-size:26px;">大 笨 蛋</span><br>你同意该结论吗？`,
+    qHint: '（系统已自动生成结论，请确认）',
+    yes: '同意 ✅（认了）', no: '不同意 ❌',
+    p: 26,
+  },
+];
+
+function renderStep(s) {
+  progress = Math.max(progress, s.p || progress);
+  card.innerHTML = `
+    <div class="top-icon">${s.icon}</div>
+    <div class="subtitle">IQ SCAN · PHASE ${idx}/${steps.length - 1}</div>
+    <div class="pg-wrap">
+      <div class="pg-fill" style="--p:${progress}%"></div>
+    </div>
+    <div class="pg-label">检测进度 ${progress}%</div>
+    <div class="q-box">
+      <div class="q-label">📋 ${s.qLabel}</div>
+      <div class="q-text">${s.q}</div>
+      ${s.qHint ? `<div style="color:rgba(255,255,255,0.3);font-size:11px;margin-top:7px;">${s.qHint}</div>` : ''}
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-yes" onclick="pressYes()">${s.yes}</button>
+      <button class="btn btn-no" id="btnNo" ontouchstart="pressNo(event)" onclick="pressNo(event)">${s.no}</button>
+    </div>
+  `;
+  updatePg();
+}
+
+function updatePg() {
+  const f = card.querySelector('.pg-fill');
+  if (f) f.style.setProperty('--p', progress + '%');
+  const l = card.querySelector('.pg-label');
+  if (l) l.textContent = '检测进度 ' + progress + '%';
+}
+
+function goNext() {
+  idx++;
+  if (idx >= steps.length) { showResult(); return; }
+  renderStep(steps[idx]);
+}
+
+function pressYes() {
+  const s = steps[idx];
+  progress = Math.min(99, progress + (s.p || 15));
+  updatePg();
+
+  // 闪一下
+  card.style.boxShadow = '0 24px 64px rgba(0,0,0,0.55), 0 0 60px rgba(110,195,255,0.35)';
+  setTimeout(() => {
+    card.style.boxShadow = '0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)';
+  }, 300);
+
+  idx++;
+  setTimeout(() => {
+    if (idx >= steps.length) { showResult(); return; }
+    renderStep(steps[idx]);
+  }, 180);
+}
+
+function pressNo(e) {
+  if (e) e.preventDefault();
+  noCount++;
+
+  const btn = document.getElementById('btnNo');
+  if (!btn) return;
+
+  // 按钮跑路
+  const bw = btn.offsetWidth || 100;
+  const bh = btn.offsetHeight || 44;
+  const mx = window.innerWidth - bw - 8;
+  const my = window.innerHeight - bh - 8;
+  const rx = Math.max(6, Math.min(mx, Math.random() * mx));
+  const ry = Math.max(6, Math.min(my, Math.random() * my));
+
+  btn.classList.add('escape');
+  btn.style.left = rx + 'px';
+  btn.style.top = ry + 'px';
+
+  // 卡片抖动
+  card.classList.remove('shake');
+  void card.offsetWidth;
+  card.classList.add('shake');
+
+  // Toast提示
+  const toasts = [
+    '点不到我吧~ 😜',
+    '哈哈，追不上！',
+    '还在挣扎吗？😈',
+    '乖乖点"是"吧~',
+    '按钮：溜了溜了 🏃💨',
+    '别跑！！',
+    '认命吧 ' + TARGET + '~',
+    '你是抓不到我的！',
+    '放弃抵抗吧 🤪',
+    '嘿嘿嘿~ 😝',
+    '又来？你好执着！',
+    '跑酷中... 🏃‍♂️',
+  ];
+  const msg = toasts[Math.min(noCount - 1, toasts.length - 1)];
+  showToast(msg);
+
+  // 偷偷加进度
+  if (noCount >= 4) {
+    progress = Math.min(99, progress + 2);
+    updatePg();
+  }
+  // 点了10+次，强制结束
+  if (noCount >= 11) {
+    progress = 100;
+    updatePg();
+    setTimeout(showResult, 600);
+  }
+}
+
+function showToast(msg) {
+  const old = document.querySelector('.toast');
+  if (old) old.remove();
+  clearTimeout(toastTimer);
+
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+
+  toastTimer = setTimeout(() => {
+    if (t.parentNode) t.remove();
+  }, 2200);
+}
+
+// ========== 结果页 ==========
+function showResult() {
+  // 清理跑路的按钮和toast
+  const esc = document.querySelector('.escape');
+  if (esc) esc.remove();
+  const tst = document.querySelector('.toast');
+  if (tst) tst.remove();
+
+  progress = 100;
+  spawnConfetti();
+
+  const quotes = [
+    '经过 NASA · MIT · 哈佛 三方联合鉴定：',
+    '全球 192 国智商数据库交叉比对：',
+    '爱因斯坦 + 牛顿 + 霍金 云端会诊：',
+    '国际大笨蛋认证协会 (ICDA) 权威认证：',
+  ];
+  const q = quotes[Math.floor(Math.random() * quotes.length)];
+
+  card.innerHTML = `
+    <div class="big-result-emoji">🤡</div>
+    <h1 style="font-size:20px;">📋 检测报告出炉</h1>
+    <div class="divider"></div>
+    <div class="pg-wrap">
+      <div class="pg-fill" style="--p:100%"></div>
+    </div>
+    <div class="pg-label">检测完成 100%</div>
+    <div class="q-box" style="line-height:1.9;">
+      <div style="color:#fff;font-size:14px;">
+        ${q}<br><br>
+        <span style="font-size:44px;display:block;margin:6px 0;">🧌</span>
+        <span class="highlight" style="font-size:30px;display:block;margin:6px 0;">
+          ${TARGET}
+        </span>
+        被正式鉴定为：<br>
+        <span style="font-size:38px;display:block;margin:8px 0;
+          background:linear-gradient(90deg,#f472b6,#ffcc00,#f472b6);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+          background-clip:text;
+          animation: iconFloat 0.7s ease infinite;
+          font-weight:900;">
+          🤪 大笨蛋 🤪
+        </span>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.8;">
+          IQ：<span style="color:#f472b6;">-250</span>（突破人类下限）<br>
+          笨蛋等级：<span style="color:#ffcc00;">SSR+ 传说级</span><br>
+          搞笑天赋：<span style="color:#6ec3ff;">★★★★★ MAX</span>
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:8px;">
+          📌 此证书永久有效 · 已上链存证 🪙<br>
+          📌 不可撤销 · 不可申诉
+        </div>
+      </div>
+    </div>
+    <button class="retry-btn" onclick="restartAll()">🔄 不服气？再测一次</button>
+    <div class="footer-hint">（测多少次结果都一样哦~）</div>
+  `;
+  updatePg();
+}
+
+function spawnConfetti() {
+  const emojis = ['🎉','🤡','🎊','🤪','💩','🎈','🃏','😂','👻','💀','🧌','🌟','😈','🤣'];
+  for (let i = 0; i < 50; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      el.style.cssText = `
+        left:${Math.random() * 88 + 6}%;
+        top:-40px;
+        --fd:${Math.random() * 2.2 + 2}s;
+        --fr:${Math.random() * 800 - 400}deg;
+        font-size:${Math.random() * 18 + 18}px;
+      `;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 4500);
+    }, i * 55);
+  }
+}
+
+function restartAll() {
+  // 清理
+  document.querySelectorAll('.confetti, .toast, .escape').forEach(e => e.remove());
+  idx = 0; noCount = 0; progress = 0;
+  card.classList.remove('shake');
+  renderStep(steps[0]);
+}
+
+// ========== 启动 ==========
+renderStep(steps[0]);
+</script>
+</body>
+</html>
