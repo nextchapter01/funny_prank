@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统安全检测中...</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    height: 100vh;
+    cursor: none;
+    user-select: none;
+  }
+
+  /* ===== 矩阵雨背景 ===== */
+  #matrix-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 0;
+    opacity: 0.15;
+  }
+
+  /* ===== 主容器 ===== */
+  #main-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ===== 弹窗卡片 ===== */
+  .terminal-box {
+    background: rgba(0, 0, 0, 0.92);
+    border: 2px solid #0f0;
+    border-radius: 4px;
+    width: 90%;
+    max-width: 750px;
+    padding: 25px 30px;
+    box-shadow: 0 0 40px rgba(0, 255, 0, 0.3), inset 0 0 20px rgba(0, 255, 0, 0.05);
+    position: relative;
+  }
+
+  .terminal-box.red-theme {
+    border-color: #f00;
+    box-shadow: 0 0 40px rgba(255, 0, 0, 0.4), inset 0 0 20px rgba(255, 0, 0, 0.05);
+  }
+
+  /* ===== 标题栏 ===== */
+  .title-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 15px;
+    border-bottom: 1px dashed #0f0;
+    margin-bottom: 15px;
+  }
+  .red-theme .title-bar { border-color: #f00; }
+
+  .blink-dot {
+    width: 12px; height: 12px;
+    background: #0f0;
+    border-radius: 50%;
+    animation: blink 0.6s infinite;
+  }
+  .red-theme .blink-dot { background: #f00; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  .title-text {
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 3px;
+  }
+  .red-theme .title-text { color: #f00; }
+
+  /* ===== 日志输出区 ===== */
+  #log-area {
+    font-size: 14px;
+    line-height: 1.8;
+    min-height: 200px;
+    max-height: 350px;
+    overflow-y: auto;
+  }
+  .red-theme #log-area { color: #f66; }
+
+  #log-area::-webkit-scrollbar { width: 4px; }
+  #log-area::-webkit-scrollbar-thumb { background: #0f0; }
+
+  .log-line { opacity: 0; animation: fadeIn 0.3s forwards; }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .log-warn  { color: #ff0; }
+  .log-error { color: #f00; font-weight: bold; }
+  .log-info  { color: #0ff; }
+  .log-dim   { color: #080; }
+
+  /* ===== 进度条 ===== */
+  .progress-wrap {
+    margin-top: 20px;
+    display: none;
+  }
+  .progress-wrap.show { display: block; }
+
+  .progress-label {
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 18px;
+    background: #111;
+    border: 1px solid #0f0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .red-theme .progress-bar { border-color: #f00; }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: #0f0;
+    transition: width 0.3s;
+    box-shadow: 0 0 8px #0f0;
+  }
+  .red-theme .progress-fill { background: #f00; box-shadow: 0 0 8px #f00; }
+
+  /* ===== 底部状态 ===== */
+  .status-bar {
+    margin-top: 15px;
+    font-size: 12px;
+    color: #0a0;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ===== 疯狂闪烁层(最终阶段) ===== */
+  #crazy-flash {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 100;
+    pointer-events: none;
+    display: none;
+    animation: crazyBg 0.15s infinite;
+  }
+  @keyframes crazyBg {
+    0%   { background: rgba(255,0,0,0.15); }
+    25%  { background: rgba(0,255,0,0.15); }
+    50%  { background: rgba(0,0,255,0.15); }
+    75%  { background: rgba(255,255,0,0.15); }
+    100% { background: rgba(255,0,255,0.15); }
+  }
+
+  /* ===== 大揭秘弹窗 ===== */
+  #reveal-popup {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 200;
+    display: none;
+    text-align: center;
+    animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  }
+  @keyframes popIn {
+    from { transform: translate(-50%, -50%) scale(0); }
+    to   { transform: translate(-50%, -50%) scale(1); }
+  }
+
+  #reveal-popup .big-emoji {
+    font-size: 120px;
+    animation: bounce 0.6s infinite alternate;
+  }
+  @keyframes bounce {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-30px); }
+  }
+
+  #reveal-popup .reveal-text {
+    font-size: 48px;
+    font-weight: bold;
+    color: #ff0;
+    text-shadow: 0 0 30px #ff0, 0 0 60px #f80;
+    margin: 10px 0;
+  }
+
+  #reveal-popup .reveal-sub {
+    font-size: 22px;
+    color: #fff;
+    margin-top: 10px;
+  }
+
+  #reveal-popup .close-btn {
+    margin-top: 25px;
+    padding: 12px 40px;
+    font-size: 18px;
+    background: #ff0;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    pointer-events: auto;
+    transition: transform 0.2s;
+  }
+  #reveal-popup .close-btn:hover {
+    transform: scale(1.1);
+  }
+
+  /* ===== 粒子爆炸 ===== */
+  .confetti {
+    position: fixed;
+    z-index: 150;
+    pointer-events: none;
+    font-size: 30px;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    0%   { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 矩阵雨 Canvas -->
+<canvas id="matrix-canvas"></canvas>
+
+<!-- 疯狂闪烁背景层 -->
+<div id="crazy-flash"></div>
+
+<!-- 主界面 -->
+<div id="main-overlay">
+  <div class="terminal-box" id="terminal-box">
+    <div class="title-bar">
+      <div class="blink-dot"></div>
+      <span class="title-text">⚠ SYSTEM SECURITY SCAN v9.7.3 ⚠</span>
+    </div>
+    <div id="log-area"></div>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-label" id="progress-label">扫描进度...</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <span id="status-left">STATUS: INITIALIZING</span>
+      <span id="status-right" style="animation: blink 1s infinite;">█</span>
+    </div>
+  </div>
+</div>
+
+<!-- 揭秘弹窗 -->
+<div id="reveal-popup">
+  <div class="big-emoji">🤡</div>
+  <div class="reveal-text">你被骗了！</div>
+  <div class="reveal-sub">这只是一个恶搞网页 😂<br>你的电脑什么事都没有～</div>
+  <button class="close-btn" onclick="location.reload()">🔄 再来一次</button>
+</div>
+
+<script>
+// ==================== 矩阵雨 ====================
+const canvas = document.getElementById('matrix-canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+const fontSize = 14;
+const columns = Math.floor(canvas.width / fontSize);
+const drops = Array(columns).fill(1);
+
+function drawMatrix() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0f0';
+  ctx.font = fontSize + 'px monospace';
+  for (let i = 0; i < drops.length; i++) {
+    const text = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+      drops[i] = 0;
+    }
+    drops[i]++;
+  }
+}
+setInterval(drawMatrix, 40);
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// ==================== 日志输出 ====================
+const logArea = document.getElementById('log-area');
+const progressWrap = document.getElementById('progress-wrap');
+const progressFill = document.getElementById('progress-fill');
+const progressLabel = document.getElementById('progress-label');
+const statusLeft = document.getElementById('status-left');
+const terminalBox = document.getElementById('terminal-box');
+const crazyFlash = document.getElementById('crazy-flash');
+const revealPopup = document.getElementById('reveal-popup');
+
+function addLog(text, cls = '') {
+  const p = document.createElement('div');
+  p.className = 'log-line ' + (cls || '');
+  p.textContent = text;
+  logArea.appendChild(p);
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+function setProgress(pct, label) {
+  progressWrap.classList.add('show');
+  progressFill.style.width = pct + '%';
+  if (label) progressLabel.textContent = label;
+}
+
+function setStatus(text) {
+  statusLeft.textContent = 'STATUS: ' + text;
+}
+
+// ==================== 恶搞脚本时间线 ====================
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function randomIP() {
+  return Array.from({length:4}, () => Math.floor(Math.random()*256)).join('.');
+}
+
+async function runPrank() {
+  // ----- 阶段1: 初始化 -----
+  setStatus('INITIALIZING...');
+  await sleep(800);
+  addLog('[+] 正在启动深度安全扫描引擎 v9.7.3...', 'log-info');
+  await sleep(600);
+  addLog('[+] 加载扫描模块: rootkit_detect.dll', 'log-dim');
+  await sleep(400);
+  addLog('[+] 加载扫描模块: trojan_scanner.dll', 'log-dim');
+  await sleep(400);
+  addLog('[+] 加载扫描模块: spyware_hunter.dll', 'log-dim');
+  await sleep(400);
+  addLog('[+] 加载扫描模块: ransomware_defender.dll', 'log-dim');
+  await sleep(500);
+  addLog('[✓] 所有模块加载完成 (4/4)', 'log-info');
+  await sleep(300);
+
+  // ----- 阶段2: 连接远程服务器(假的) -----
+  setStatus('CONNECTING TO SECURITY DATABASE...');
+  await sleep(600);
+  const fakeIP = randomIP();
+  addLog(`[*] 正在连接云端威胁情报中心 -> ${fakeIP}:8443`, 'log-info');
+  await sleep(1000);
+  addLog('[✓] 连接建立成功', 'log-info');
+  await sleep(300);
+  addLog(`[*] 同步最新病毒库 (2026-05-31) ...`, 'log-dim');
+  await sleep(800);
+  addLog('[✓] 病毒库已更新: 12,847,392 条威胁签名', 'log-info');
+  await sleep(500);
+
+  // ----- 阶段3: 开始扫描 -----
+  setStatus('SCANNING IN PROGRESS...');
+  await sleep(400);
+  addLog('', '');
+  addLog('═══════════════════════════════════════', 'log-info');
+  addLog('  开始全盘深度扫描...', 'log-info');
+  addLog('═══════════════════════════════════════', 'log-info');
+  await sleep(600);
+
+  // 模拟扫描
+  const scanItems = [
+    { name: '系统内存 (RAM)', warn: false },
+    { name: '注册表 (Registry)', warn: false },
+    { name: '启动项 (Startup Items)', warn: false },
+    { name: '系统服务 (Services)', warn: false },
+    { name: '浏览器缓存 (Browser Cache)', warn: false },
+    { name: '临时文件 (Temp Files)', warn: false },
+    { name: '网络端口 (Network Ports)', warn: true },
+    { name: '用户凭证 (User Credentials)', warn: true },
+    { name: '个人照片 (Photos)', warn: true },
+    { name: '浏览器历史记录', warn: true },
+    { name: '微信/QQ聊天记录', warn: true },
+  ];
+
+  for (let i = 0; i < scanItems.length; i++) {
+    const item = scanItems[i];
+    const pct = Math.round(((i + 1) / scanItems.length) * 50); // 第一阶段只到50%
+    setProgress(pct, `正在扫描: ${item.name}`);
+    setStatus(`SCANNING: ${item.name}`);
+
+    await sleep(300 + Math.random() * 600);
+
+    if (item.warn && i >= 6) {
+      addLog(`[!] ${item.name} - 发现可疑活动!`, 'log-warn');
+      await sleep(300);
+    } else {
+      addLog(`[✓] ${item.name} - 正常`, 'log-dim');
+    }
+  }
+
+  // ----- 阶段4: 发现"威胁" -----
+  setProgress(55, '深度分析可疑项目中...');
+  await sleep(1000);
+  addLog('', '');
+  addLog('⚠⚠⚠ 警告: 检测到潜在威胁! ⚠⚠⚠', 'log-error');
+  await sleep(800);
+
+  const threats = [
+    '检测到 3 个高风险漏洞 (CVE-2026-????)',
+    '发现可疑网络连接: ' + randomIP() + ':6667 (疑似C2服务器)',
+    '检测到键盘记录器特征码 (Keylogger Signature)',
+    '浏览器密码可能存在泄露风险',
+    '发现隐藏进程: svch0st.exe (伪装系统进程)',
+    '检测到未授权的远程访问后门',
+  ];
+
+  for (const t of threats) {
+    addLog(`  ⚡ ${t}`, 'log-error');
+    await sleep(500 + Math.random() * 400);
+  }
+
+  // 切红色主题
+  terminalBox.classList.add('red-theme');
+  addLog('', '');
+  addLog('🔴 风险评估等级: 严重 (CRITICAL)', 'log-error');
+  await sleep(600);
+
+  // ----- 阶段5: 假装清理 -----
+  setProgress(65, '正在清除威胁...');
+  setStatus('REMOVING THREATS...');
+  await sleep(500);
+  addLog('[*] 启动应急响应协议...', 'log-warn');
+  await sleep(800);
+  addLog('[*] 正在隔离恶意文件...', 'log-warn');
+  await sleep(600);
+
+  for (let i = 70; i <= 90; i += 5) {
+    setProgress(i, `清理进度: ${i}%`);
+    await sleep(300 + Math.random() * 400);
+  }
+
+  addLog('[!] 警告: 部分威胁需要重启后才能清除', 'log-error');
+  await sleep(500);
+  addLog('[!] 检测到顽固型恶意软件，正在尝试强力清除...', 'log-error');
+  await sleep(1000);
+
+  setProgress(92, '强力清除模式已激活...');
+  await sleep(800);
+  addLog('[!!] 警告: 检测到恶意软件正在尝试自我保护!', 'log-error');
+  await sleep(600);
+  addLog('[!!] 正在绕过恶意软件防御...', 'log-warn');
+
+  // 进度条卡住(故意的)
+  setProgress(95, '处理中...请勿关闭此页面!');
+  await sleep(2000);
+  setProgress(96, '仍在处理...');
+  await sleep(2000);
+  setProgress(97, '即将完成...');
+  await sleep(1500);
+
+  // ----- 阶段6: 疯狂模式 -----
+  crazyFlash.style.display = 'block';
+  setStatus('!! CRITICAL SYSTEM STATE !!');
+
+  addLog('', '');
+  addLog('🆘 严重错误! 检测到内核级Rootkit!', 'log-error');
+  await sleep(500);
+  addLog('🆘 系统文件正在被修改...', 'log-error');
+  await sleep(400);
+  addLog('🆘 无法终止恶意进程!', 'log-error');
+  await sleep(400);
+  addLog('🆘 正在尝试最后手段...', 'log-error');
+  await sleep(800);
+
+  setProgress(98, '紧急状态 - 正在调用系统还原...');
+  await sleep(1500);
+  addLog('...', '');
+  await sleep(500);
+  addLog('...', '');
+  await sleep(500);
+  addLog('[*] 正在回滚恶意修改...', 'log-warn');
+  await sleep(1200);
+  addLog('[*] 正在修复注册表...', 'log-warn');
+  await sleep(1000);
+
+  setProgress(99, '99% - 最后检查...');
+  await sleep(2500);
+  setProgress(100, '100% - 扫描完成!');
+
+  await sleep(800);
+
+  // ----- 阶段7: 大揭秘! -----
+  crazyFlash.style.display = 'none';
+  terminalBox.classList.remove('red-theme');
+
+  addLog('', '');
+  addLog('═══════════════════════════════════════', 'log-info');
+  addLog('  扫描完成。', 'log-info');
+  addLog('═══════════════════════════════════════', 'log-info');
+  await sleep(500);
+  addLog('', '');
+  addLog('[✓] 好吧，其实上面全是编的 😂', 'log-info');
+  addLog('[✓] 你的电脑完全安全~', 'log-info');
+  addLog('[✓] 这只是一个恶搞网页!', 'log-info');
+  await sleep(600);
+
+  // 显示大揭秘
+  revealPopup.style.display = 'block';
+  setStatus('PRANK COMPLETE 🤡');
+
+  // 撒花
+  spawnConfetti();
+}
+
+// ==================== 撒花特效 ====================
+function spawnConfetti() {
+  const emojis = ['🎉', '😂', '🤡', '💀', '🎊', '✨', '🔥', '💩', '👻', '🤣', '😈'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      el.style.left = Math.random() * 100 + '%';
+      el.style.animationDuration = (2 + Math.random() * 4) + 's';
+      el.style.fontSize = (20 + Math.random() * 40) + 'px';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 5000);
+    }, i * 80);
+  }
+}
+
+// ==================== 防止误关 ====================
+// 点击任意位置不会退出全屏
+document.addEventListener('click', (e) => {
+  if (revealPopup.style.display === 'block') return;
+  // 不做任何事，保持沉浸体验
+});
+
+// ESC 也拦一下(部分浏览器拦不住)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && revealPopup.style.display !== 'block') {
+    e.preventDefault();
+    addLog('[!] 请勿关闭此页面! 扫描进行中...', 'log-warn');
+  }
+});
+
+// ==================== 启动 ====================
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(runPrank, 500);
+});
+</script>
+</body>
+</html>
